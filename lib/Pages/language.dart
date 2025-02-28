@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mendelupp/Common/localization.dart';
 import '../main.dart';
 
 class LanguagesPage extends StatelessWidget {
@@ -8,7 +9,7 @@ class LanguagesPage extends StatelessWidget {
   List<Widget> _buildButtonsWithNames(BuildContext context, List<String> langs) {
     List<TextButton> buttonsList = [];
     for (String lang in langs) {
-      buttonsList.add(TextButton(onPressed: () {MyApp.of(context).localization.setLocale(Locale.fromSubtags(languageCode: lang));}, child: Text("Set locale to $lang")));
+      buttonsList.add(TextButton(onPressed: () {DemoLocalization().setLocale(Locale.fromSubtags(languageCode: lang));}, child: Text("Set locale to $lang")));
     }
     return buttonsList;
   }
@@ -24,15 +25,15 @@ class LanguagesPage extends StatelessWidget {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
     // Here we take the value from the MyHomePage object that was created by
     // the App.build method, and use it to set our appbar title.
-    title: Text(MyApp.of(context).localization.translate("change_language")),
+    title: Text(DemoLocalization().translate("change_language")),
           centerTitle: true,
     ),
     body: Center(child: Column(
       children: [
         const Text("Select language:"),
-        ..._buildButtonsWithNames(context, MyApp.of(context).localization.getSupported()),
-        Text("Selected language: ${MyApp.of(context).localization.getLocale().toLanguageTag()}"),
-        Text("Selected language: ${MyApp.of(context).localization.translate("home_page")}"),
+        ..._buildButtonsWithNames(context, DemoLocalization().getSupported()),
+        Text("Selected language: ${DemoLocalization().getLocale().toLanguageTag()}"),
+        Text("Selected language: ${DemoLocalization().translate("home_page")}"),
       ],
     )
     )

@@ -10,13 +10,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
 class DemoLocalization {
-  DemoLocalization(this._localeDefault, this.appRefreshState) {_locale = _localeDefault;}
+  static final DemoLocalization _singleton = DemoLocalization._internal();
 
-  Function appRefreshState;
-  final Locale _localeDefault;
+  factory DemoLocalization() {
+    return _singleton;
+  }
+
+  DemoLocalization._internal();
+
+
+
+  //DemoLocalization._internal(this._localeDefault, this.appRefreshState) {_locale = _localeDefault;}
+
+  //DemoLocalization(this._localeDefault, this.appRefreshState) {_locale = _localeDefault;}
+
+  late Function _appRefreshState;
+  late Locale _localeDefault;
   late Locale _locale;
 
 
+  void init(Locale localeDefault, Function appRefreshState)
+  {
+    _locale = localeDefault;
+    _localeDefault = localeDefault;
+    _appRefreshState = appRefreshState;
+  }
 
   final String SHAREDPREFS_LANGUAGE_CODE = 'languageCode';
 
@@ -29,7 +47,7 @@ class DemoLocalization {
     await prefs.setString(SHAREDPREFS_LANGUAGE_CODE, value.toLanguageTag());
 
     _locale = value;
-    appRefreshState();
+    _appRefreshState();
   }
 
   Locale getLocale() {

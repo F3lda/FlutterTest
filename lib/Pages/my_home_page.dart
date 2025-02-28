@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:mendelupp/Common/change_notifiers.dart';
+import 'package:mendelupp/Common/localization.dart';
 import 'package:provider/provider.dart';
 
 import 'language.dart';
@@ -77,7 +78,7 @@ class _MyHomePageState extends State<MyHomePage> {
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           // Here we take the value from the MyHomePage object that was created by
           // the App.build method, and use it to set our appbar title.
-          title: Text(MyApp.of(context).localization.translate("home_page")),//Text(widget.title),
+          title: Text(DemoLocalization().translate("home_page")),//Text(widget.title),
           actions: const <Widget>[Menu2()]
         ),
         body: Center(

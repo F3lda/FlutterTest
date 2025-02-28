@@ -55,7 +55,7 @@ class MyApp extends StatefulWidget {
 class MyAppState extends State<MyApp> {
   //const MyApp({super.key});
   //ThemeMode _themeMode = ThemeMode.system;
-  late DemoLocalization localization;
+  //late DemoLocalization localization;
 
   bool isLoading = true;
 
@@ -63,8 +63,8 @@ class MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
-    localization = DemoLocalization(const Locale.fromSubtags(languageCode: 'cz'), refreshState);
-    localization.load().then((void none) {isLoading = false; setState(() {});});
+    DemoLocalization().init(const Locale.fromSubtags(languageCode: 'cz'), () {setState(() {});});
+    DemoLocalization().load().then((void none) {isLoading = false; setState(() {});});
 
   }
 
