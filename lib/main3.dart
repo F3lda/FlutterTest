@@ -44,8 +44,9 @@ class NavigationManager extends StatefulWidget {
 class _NavigationManagerState extends State<NavigationManager> {
   int currentPage = 1;
   int historyPosition = 1;
+  //int onPopStateLastHistoryPosition = 1;
+  String onPopStateLastState = '_';
 
-  String onPopStateLastState = '';
 
   @override
   void initState() {
@@ -54,31 +55,50 @@ class _NavigationManagerState extends State<NavigationManager> {
     print('START URL: ${html.window.location.pathname}');
 
     if (html.window.location.pathname == '' || html.window.location.pathname == '/') {
-      html.window.history.replaceState({'page': 1}, 'Page 1', '/start'); // default url
+      html.window.history.replaceState({'page': 1}, 'Page 1', '/page11'); // default url
     }
 
+    //BuildContext contxt = context;
 
     html.window.onPopState.listen((event) {
       if (onPopStateLastState != (html.window.location.pathname??'')) {
         onPopStateLastState = html.window.location.pathname??'';
 
+
+        //print('Event state: ${event.toString()}');
         print('🌐 Browser Back/Forward pressed - using default behavior');
-        print('Event state: ${event.state}');
+        //print('onPopStateLastState: ${onPopStateLastState}');
+        /*print('Event state: ${event.state}');
         print('Current URL: ${html.window.location.href}');
-        print('search URL: ${html.window.location.pathname}');
+        print('search URL: ${html.window.location.pathname}');*/
         //Navigator.of(event.context).pushNamed('/page3');
         // Let browser handle it normally
-        print("POPSTATE END");
-        setState(() {
+        /*setState(() {});*/
 
-        });
+        //TODO check if forward or back button was pressed
+        // save all push urls and check if current is second last item in history -> back else forward
+        // remove last inserted item when pop
+        // when forward -> history push state with same url as current and history back
+        // (maybe try support forward by navigator push page)
+        // or do nothing and show message that forward is not supported
+        // or RELOAD CURRENT PAGE (reload forwarded page so it displays right content)
+
+        if (historyPosition > 1) {
+
+          historyPosition--;
+          print("POP");
+
+          Navigator.pop(context);
+        }
+
+        print("POPSTATE END");
       } else {
+        // should never be reach because of Navigator.pop(context);
         print("TWICE");
       }
     });
 
     // Set initial URL without hash
-    print('search URL: ${html.window.location.pathname}');
     //html.window.history.replaceState({'serialCount' : 0, 'page': 1}, 'Page 1', '/page112');
     print(html.window.history.state);
     print('search URL: ${html.window.location.pathname}');
@@ -100,21 +120,22 @@ class _NavigationManagerState extends State<NavigationManager> {
         'Page $pageNumber',
         '/page$pageNumber'
     );
+    onPopStateLastState = '_';
   }
 
   void goBack() {
     if (historyPosition > 1) {
       print('📱 Flutter back button - using history.back()');
 
-      setState(() {
-        currentPage--;
-        historyPosition--;
-      });
+      currentPage--;
+
+      /*setState(() {
+      });*/
 
       print('History position: $historyPosition');
 
       // Use browser's history.back()
-      //html.window.history.back();
+      html.window.history.back();
     } else {
       print('📱 No history to go back - history position: $historyPosition');
     }
@@ -131,7 +152,7 @@ class _NavigationManagerState extends State<NavigationManager> {
         child: Scaffold(
           backgroundColor: Colors.red[100],
           appBar: AppBar(
-            title: Text('Page 1'),
+            title: Text('Page 11'),
             backgroundColor: Colors.red,
             automaticallyImplyLeading: true, // Remove default back button
           ),
@@ -140,12 +161,26 @@ class _NavigationManagerState extends State<NavigationManager> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  html.window.location.pathname?? '',
+                  html.window.location.pathname ?? '',
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 20),
                 Text('This is the first page'),
-                Text('Clean URL: /page1'),
+                Text('Clean URL: /page11'),
+                SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: () {navigateToPage(1); Navigator.push(context, MaterialPageRoute(builder: (context) => Page1(onNavigateToPage: navigateToPage, onGoBack: goBack))).then((onValue) {setState(() {
+
+                  });});},
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  ),
+                  child: Text(
+                    'PAGE 1',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                ),
                 SizedBox(height: 40),
                 ElevatedButton(
                   onPressed: () => navigateToPage(1),
@@ -230,7 +265,11 @@ class Page1 extends StatelessWidget {
           appBar: AppBar(
             title: Text('Page 1'),
             backgroundColor: Colors.red,
-            automaticallyImplyLeading: true, // Remove default back button
+            //automaticallyImplyLeading: true, // Remove default back button
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back),
+              onPressed: onGoBack,
+            ),
           ),
           body: Center(
             child: Column(
@@ -245,7 +284,7 @@ class Page1 extends StatelessWidget {
                 Text('Clean URL: /page1'),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  onPressed: () => onNavigateToPage(2),
+                  onPressed: () {onNavigateToPage(2); Navigator.push(context, MaterialPageRoute(builder: (context) => Page2(onNavigateToPage: onNavigateToPage, onGoBack: onGoBack)));},
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -332,7 +371,7 @@ class Page2 extends StatelessWidget {
                     ),
                     SizedBox(width: 20),
                     ElevatedButton(
-                      onPressed: () => onNavigateToPage(3),
+                      onPressed: () {onNavigateToPage(3); Navigator.push(context, MaterialPageRoute(builder: (context) => Page3(onNavigateToPage: onNavigateToPage, onGoBack: onGoBack)));},
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -343,7 +382,8 @@ class Page2 extends StatelessWidget {
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => onNavigateToPage(1),
+                  onPressed: () {onNavigateToPage(1); Navigator.push(context, MaterialPageRoute(builder: (context) => Page1(onNavigateToPage: onNavigateToPage, onGoBack: onGoBack)));},
+
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
