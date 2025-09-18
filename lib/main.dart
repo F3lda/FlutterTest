@@ -46,6 +46,10 @@ class _NavigationManagerState extends State<NavigationManager> {
   int historyPosition = 1;
 
   String onPopStateLastState = '';
+  String lastPathName = '';
+
+  String currentUrl = '';
+  String originUrl = '';
 
   @override
   void initState() {
@@ -54,13 +58,12 @@ class _NavigationManagerState extends State<NavigationManager> {
     print('START URL: ${html.window.location.pathname}');
 
     if (html.window.location.pathname == '' || html.window.location.pathname == '/') {
-      html.window.history.replaceState({'page': 1}, 'Page 1', '/start'); // default url
+      //html.window.history.replaceState({'page': 1}, 'Page 1', '/start'); // default url
     }
 
 
     html.window.onPopState.listen((event) {
       if (onPopStateLastState != (html.window.location.pathname??'')) {
-        onPopStateLastState = html.window.location.pathname??'';
 
         print('🌐 Browser Back/Forward pressed - using default behavior');
         print('Event state: ${event.state}');
@@ -69,9 +72,19 @@ class _NavigationManagerState extends State<NavigationManager> {
         //Navigator.of(event.context).pushNamed('/page3');
         // Let browser handle it normally
         print("POPSTATE END");
-        setState(() {
+        if (lastPathName.startsWith(html.window.location.pathname??'')) {//back
+          Navigator.pop(context);
+        } else {// forward
 
-        });
+          // TODO rebuild current widgepage and show next page
+          // or pop until root and rebuild all
+          setState(() {
+
+          });
+        }
+
+        onPopStateLastState = html.window.location.pathname??'';
+        lastPathName = html.window.location.pathname??'';
       } else {
         print("TWICE");
       }
@@ -83,14 +96,22 @@ class _NavigationManagerState extends State<NavigationManager> {
     print(html.window.history.state);
     print('search URL: ${html.window.location.pathname}');
     print("initState");
+
+
+    currentUrl = html.window.location.pathname?? '';
+    originUrl = html.window.location.pathname?? '';
+
+    html.window.history.replaceState({'serialCount' : 0, 'page': 0}, 'Page 0', '/');
+
+    if (originUrl.startsWith('/page1')) {
+      navigateToPage(1);
+    }
+
   }
 
   void navigateToPage(int pageNumber) {
     print('📱 Navigating to Page $pageNumber using history.pushState');
 
-    setState(() {
-      currentPage = pageNumber;
-    });
 
     historyPosition++;
 
@@ -100,28 +121,59 @@ class _NavigationManagerState extends State<NavigationManager> {
         'Page $pageNumber',
         '/page$pageNumber'
     );
+
+    lastPathName = html.window.location.pathname??'';
+    currentUrl = html.window.location.pathname??'';
+
+    onPopStateLastState = '_';
+
+
+    setState(() {
+      currentPage = pageNumber;
+    });
   }
 
-  void goBack() {
+  bool goBack() {
     if (historyPosition > 1) {
       print('📱 Flutter back button - using history.back()');
 
-      setState(() {
+      /*setState(() {
         currentPage--;
         historyPosition--;
-      });
+      });*/
 
       print('History position: $historyPosition');
 
       // Use browser's history.back()
-      //html.window.history.back();
+      html.window.history.back();
+      return true;
     } else {
       print('📱 No history to go back - history position: $historyPosition');
+      return false;
     }
   }
 
+  String thisUrl = '/';
+  bool page1IsActive = false;
+
   @override
   Widget build(BuildContext context) {
+    if (currentUrl == '/'){
+
+    } else if (currentUrl.startsWith('/page1')) {
+      if (!page1IsActive) {
+        page1IsActive = true;
+        Future.microtask(() {//navigateToPage(1);
+            Navigator.push(context, MaterialPageRoute(builder: (context) =>
+                Page1(onNavigateToPage: navigateToPage,
+                    onGoBack: goBack,
+                    parentUrl: thisUrl, originUrl: originUrl))).then((onValue) {
+              page1IsActive = false;
+
+              print("PAGE1 END");
+            });});
+      }
+    }
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -131,7 +183,7 @@ class _NavigationManagerState extends State<NavigationManager> {
         child: Scaffold(
           backgroundColor: Colors.red[100],
           appBar: AppBar(
-            title: Text('Page 1'),
+            title: Text('Page 0'),
             backgroundColor: Colors.red,
             automaticallyImplyLeading: true, // Remove default back button
           ),
@@ -215,15 +267,18 @@ class _NavigationManagerState extends State<NavigationManager> {
 
 class Page1 extends StatelessWidget {
   final Function(int) onNavigateToPage;
-  final VoidCallback onGoBack;
+  final bool Function() onGoBack;
+  final String parentUrl; // url till parent page
+  final String originUrl; // url when app loaded
 
-  const Page1({Key? key, required this.onNavigateToPage, required this.onGoBack}) : super(key: key);
+  const Page1({Key? key, required this.onNavigateToPage, required this.onGoBack, required this.parentUrl, required this.originUrl}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
         onPopInvokedWithResult: (didPop, result) {
+          //onGoBack();
         },
         child: Scaffold(
           backgroundColor: Colors.red[100],
@@ -231,6 +286,10 @@ class Page1 extends StatelessWidget {
             title: Text('Page 1'),
             backgroundColor: Colors.red,
             automaticallyImplyLeading: true, // Remove default back button
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back),
+              onPressed: onGoBack,
+            ),
           ),
           body: Center(
             child: Column(
@@ -287,7 +346,7 @@ class Page1 extends StatelessWidget {
 
 class Page2 extends StatelessWidget {
   final Function(int) onNavigateToPage;
-  final VoidCallback onGoBack;
+  final bool Function() onGoBack;
 
   const Page2({Key? key, required this.onNavigateToPage, required this.onGoBack}) : super(key: key);
 
@@ -382,7 +441,7 @@ class Page2 extends StatelessWidget {
 
 class Page3 extends StatelessWidget {
   final Function(int) onNavigateToPage;
-  final VoidCallback onGoBack;
+  final bool Function() onGoBack;
 
   const Page3({Key? key, required this.onNavigateToPage, required this.onGoBack}) : super(key: key);
 
