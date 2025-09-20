@@ -35,6 +35,176 @@ void rebuildAllChildren(BuildContext context) {
   (context as Element).visitChildren(rebuild);
 }*/
 
+class WebRouter {
+  static late State<dynamic> lastPageState;
+  static String lastPathname = ''; // currentUrl / currentPathname
+  static int historyPosition = 1;
+  static String appStartPath = '';
+  static bool initStarted = false;
+
+  static bool init(BuildContext context, String defaultPathname) {
+    if (initStarted) {return false;} // run only once
+    initStarted = true;
+
+
+    print('START URL: ${html.window.location.pathname}');
+
+
+
+
+    html.window.onPopState.listen((event) {
+      if (lastPathname != (html.window.location.pathname??'')) {
+
+        print('🌐 Browser Back/Forward pressed - using default behavior');
+        print('Event state: ${event.state}');
+        print('Current URL: ${html.window.location.href}');
+        print('search URL: ${html.window.location.pathname}');
+        print('last patname: ${lastPathname}');
+        //Navigator.of(event.context).pushNamed('/page3');
+        // Let browser handle it normally
+        if (lastPathname.startsWith(html.window.location.pathname??'')) {//back
+          if (lastPathname != '' && lastPathname != '/') { // pop only when its not in the root
+            historyPosition--;
+            print("POPSTATE BACK");
+            Navigator.pop(context);
+          }
+        } else {// forward
+          historyPosition++;
+          print("POPSTATE FORWARD");
+          // TODO rebuild current widget page and show next page
+          // or pop until root and rebuild all
+          //https://stackoverflow.com/questions/43778488/how-to-force-flutter-to-rebuild-redraw-all-widgets
+          lastPageState.setState(() {
+
+          });
+          //RouteTracker.rebuildCurrent(context);
+
+          //rebuildAllChildren(context);
+        }
+        print('History position: $historyPosition');
+
+        lastPathname = html.window.location.pathname??'';
+      } else {
+        print("TWICE");
+      }
+    });
+
+    // Set initial URL without hash
+    print('search URL: ${html.window.location.pathname}');
+    //html.window.history.replaceState({'serialCount' : 0, 'page': 1}, 'Page 1', '/page112');
+    print(html.window.history.state);
+    print('search URL: ${html.window.location.pathname}');
+    print("initState");
+    print('History position: $historyPosition');
+
+
+
+
+    //currentUrl = html.window.location.pathname?? '';
+    appStartPath = html.window.location.pathname?? '';
+    lastPathname = html.window.location.pathname??'';
+
+
+    // run only once
+
+    if ((appStartPath == '' || appStartPath == '/' ||  appStartPath == defaultPathname) && defaultPathname.startsWith('/')) {
+      html.window.history.replaceState({'page': 0}, '', defaultPathname); // default url
+    } else {
+      html.window.history.replaceState({'page': 0}, '', '/');//'serialCount' : 0,
+    }
+
+    print('INIT: '+ (html.window.location.pathname??''));
+
+    return true;
+  }
+
+  static void navigateToPage(String pagePath, VoidCallback setStateCallback) {
+    print('📱 Navigating to Page $pagePath using history.pushState');
+
+
+    historyPosition++;
+
+    // Push new state to browser history with clean URL
+    html.window.history.pushState(
+        {'page': pagePath},
+        'Page $pagePath',
+        pagePath
+    );
+
+    lastPathname = html.window.location.pathname??'';
+
+
+
+    //setState(() {});
+    //RouteTracker.rebuildCurrent(context);
+    setStateCallback();
+  }
+
+  static bool goBack() {
+    if (html.window.location.pathname != '' && html.window.location.pathname != '/') {
+      //if (historyPosition > 1) {
+      print('📱 Flutter back button - using history.back()');
+
+      /*setState(() {
+      });*/
+
+      print('History position: $historyPosition');
+
+      // Use browser's history.back()
+      html.window.history.back();
+      return true;
+    } else {
+      print('📱 No history to go back - history position: $historyPosition');
+      return false;
+    }
+  }
+
+  static bool initPath(Map<String,Widget> routes, bool pathStarted, VoidCallback setStateCallback) {
+    if (pathStarted) return true; // run only once in initState() in current widget
+
+    List<String> listRoutes = routes.keys.toList();
+    for(var i = 0; i < listRoutes.length; i++){
+      if(appStartPath.startsWith(listRoutes[i])) {
+        navigateToPage(listRoutes[i], setStateCallback);
+        return true;
+      }
+    }
+
+    return true;
+  }
+
+  static String navigatePath(BuildContext context, Map<String,Widget> routes, String thisPagePath, String childPageActive, VoidCallback onPopPage) {
+    //print("navigatePath: "+ thisPagePath + ' : ' + lastPathname);
+    List<String> listRoutes = routes.keys.toList();
+    for(var i = 0; i < listRoutes.length; i++){
+//print(listRoutes[i]);
+      if (lastPathname.startsWith(listRoutes[i])) {
+        if (childPageActive != listRoutes[i]) {
+          Future.microtask(() {//navigateToPage(1);
+            Navigator.push(context, MaterialPageRoute(builder: (context) =>
+                routes[listRoutes[i]]!)).then((onValue) {
+              onPopPage();
+              //print("PAGE1 END");
+            });});
+
+          print("navigatePath: "+ thisPagePath + ' : ' + listRoutes[i] + ' : ' + lastPathname);
+
+          //childPageActive = '/page1';
+          return listRoutes[i];
+        }
+      }
+
+      /*if(appStartPath.startsWith(listRoutes[i])) {
+        navigateToPage(listRoutes[i], setStateCallback);
+        return true;
+      }*/
+    }
+
+
+    return '';
+  }
+}
+
 
 void main() {
   //WidgetsFlutterBinding.ensureInitialized();
@@ -67,139 +237,57 @@ class MyApp extends StatelessWidget {
 
 
 class NavigationManager extends StatefulWidget {
+
+
+  String thisPageFullPath = '';
+
   @override
   _NavigationManagerState createState() => _NavigationManagerState();
 }
 
 
-late State<dynamic> lastPageState;
+/*late State<dynamic> lastPageState;
 
 String lastPathName = ''; // currentUrl
 
+int historyPosition = 1;
+
+String startPath = '';*/
 class _NavigationManagerState extends State<NavigationManager> {
-  int historyPosition = 1;
 
-  String startPath = '';
 
+  String childPageActive = '';
+  static bool pathStarted = false;
+  Map<String,Widget> routes = {};
 
   @override
   void initState() {
     super.initState();
 
-    lastPageState = this;
 
-    print('START URL: ${html.window.location.pathname}');
+    WebRouter.init(context, '');
 
-    if (html.window.location.pathname == '' || html.window.location.pathname == '/') {
-      //html.window.history.replaceState({'page': 1}, 'Page 1', '/start'); // default url
-    }
-
-
-    html.window.onPopState.listen((event) {
-      if (lastPathName != (html.window.location.pathname??'')) {
-
-        print('🌐 Browser Back/Forward pressed - using default behavior');
-        print('Event state: ${event.state}');
-        print('Current URL: ${html.window.location.href}');
-        print('search URL: ${html.window.location.pathname}');
-        print('last patname: ${lastPathName}');
-        //Navigator.of(event.context).pushNamed('/page3');
-        // Let browser handle it normally
-        if (lastPathName.startsWith(html.window.location.pathname??'')) {//back
-          if (lastPathName != '' && lastPathName != '/') { // pop only when its not in the root
-            historyPosition--;
-            print("POPSTATE BACK");
-            Navigator.pop(context);
-          }
-        } else {// forward
-          historyPosition++;
-          print("POPSTATE FORWARD");
-          // TODO rebuild current widget page and show next page
-          // or pop until root and rebuild all
-          //https://stackoverflow.com/questions/43778488/how-to-force-flutter-to-rebuild-redraw-all-widgets
-          lastPageState.setState(() {
-
-          });
-          //RouteTracker.rebuildCurrent(context);
-
-          //rebuildAllChildren(context);
-        }
-        print('History position: $historyPosition');
-
-        lastPathName = html.window.location.pathname??'';
-      } else {
-        print("TWICE");
-      }
-    });
-
-    // Set initial URL without hash
-    print('search URL: ${html.window.location.pathname}');
-    //html.window.history.replaceState({'serialCount' : 0, 'page': 1}, 'Page 1', '/page112');
-    print(html.window.history.state);
-    print('search URL: ${html.window.location.pathname}');
-    print("initState");
-    print('History position: $historyPosition');
+    WebRouter.lastPageState = this;
+    //widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
+    routes = {
+      widget.thisPageFullPath+Page1.thisPagePath : Page1(parentPath: widget.thisPageFullPath)
+    };
+    pathStarted = WebRouter.initPath(routes, pathStarted, () {setState(() {});});
 
 
-    //currentUrl = html.window.location.pathname?? '';
-    startPath = html.window.location.pathname?? '';
-    lastPathName = html.window.location.pathname??'';
 
-    // run only once
-    html.window.history.replaceState({'serialCount' : 0, 'page': 0}, 'Page 0', '/');
-    if (startPath.startsWith('/page1')) {
-      navigateToPage('/page1', () {setState(() {});});
-    }
+    /*if (startPath.startsWith(thisPagePath+'/page1')) {
+      navigateToPage(thisPagePath+'/page1', () {setState(() {});});
+    }*/
 
   }
 
-  void navigateToPage(String pagePath, VoidCallback setStateCallback) {
-    print('📱 Navigating to Page $pagePath using history.pushState');
 
-
-    historyPosition++;
-
-    // Push new state to browser history with clean URL
-    html.window.history.pushState(
-        {'page': pagePath},
-        'Page $pagePath',
-        pagePath
-    );
-
-    lastPathName = html.window.location.pathname??'';
-
-
-
-    //setState(() {});
-    //RouteTracker.rebuildCurrent(context);
-    setStateCallback();
-  }
-
-  bool goBack() {
-    if (html.window.location.pathname != '' && html.window.location.pathname != '/') {
-    //if (historyPosition > 1) {
-      print('📱 Flutter back button - using history.back()');
-
-      /*setState(() {
-      });*/
-
-      print('History position: $historyPosition');
-
-      // Use browser's history.back()
-      html.window.history.back();
-      return true;
-    } else {
-      print('📱 No history to go back - history position: $historyPosition');
-      return false;
-    }
-  }
-
-  String thisPagePath = '';
-  String childPageActive = '';
 
   @override
   Widget build(BuildContext context) {
-    if (lastPathName == '/'){
+    childPageActive = WebRouter.navigatePath(context, routes, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; WebRouter.lastPageState = this;});
+    /*if (lastPathName == '/'){
 
     } else if (lastPathName.startsWith('/page1')) {
       if (childPageActive != '/page1') {
@@ -214,7 +302,7 @@ class _NavigationManagerState extends State<NavigationManager> {
               print("PAGE1 END");
             });});
       }
-    }
+    }*/
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -241,7 +329,7 @@ class _NavigationManagerState extends State<NavigationManager> {
                 Text('Clean URL: /page1'),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  onPressed: () => navigateToPage('/page1', () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page1.thisPagePath, () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -253,7 +341,7 @@ class _NavigationManagerState extends State<NavigationManager> {
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => navigateToPage('', () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage('', () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -265,7 +353,7 @@ class _NavigationManagerState extends State<NavigationManager> {
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => navigateToPage('', () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage('', () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -309,12 +397,12 @@ class _NavigationManagerState extends State<NavigationManager> {
 
 class Page1 extends StatefulWidget {
 
-  final Function(String, VoidCallback) onNavigateToPage;
-  final bool Function() onGoBack;
-  final String parentPath; // url till parent page
-  final String startPath;
+  static String thisPagePath = '/page1';
 
-  const Page1({super.key, required this.onNavigateToPage, required this.onGoBack, required this.parentPath, required this.startPath}); // url when app loaded
+  String thisPageFullPath = thisPagePath;
+  final String parentPath; // url till parent page
+
+  Page1({super.key, required this.parentPath}); // url when app loaded
 
   @override
   _Page1State createState() => _Page1State();
@@ -325,18 +413,27 @@ class _Page1State extends State<Page1> {
 
   //Page1({Key? key, required this.onNavigateToPage, required this.onGoBack, required this.parentPath, required this.startPath}) : super(key: key);
 
-  String thisPagePath = '/page1';
   String childPageActive = '';
   static bool pathStarted = false;
+  Map<String,Widget> routes = {};
 
   @override
   void initState() {
 
+    WebRouter.lastPageState = this;
+    widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
+    routes = {
+      widget.thisPageFullPath+Page2.thisPagePath : Page2(parentPath: widget.thisPageFullPath)
+    };
+    pathStarted = WebRouter.initPath(routes, pathStarted, () {setState(() {});});
+
+
+    /*
     lastPageState = this;
     //super.initState();
 
-    thisPagePath = widget.parentPath+thisPagePath;
-
+    widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
+*/
     /*
     routes = {
       thisPagePath + '/page2' : Page2(parentPath: thisPagePath),
@@ -347,20 +444,21 @@ class _Page1State extends State<Page1> {
 
     // pathStarted = WebRouter.pathInit(routes) //{return 1;}
 
-    if (!pathStarted) { // run only once
+    /*if (!pathStarted) { // run only once
       pathStarted = true;
       if (widget.startPath.startsWith(thisPagePath + '/page2')) {
         widget.onNavigateToPage(thisPagePath + '/page2', () {setState(() {});});
       }
-    }
+    }*/
   }
 
   @override
   Widget build(BuildContext context) {
+    childPageActive = WebRouter.navigatePath(context, routes, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; WebRouter.lastPageState = this;});
 
     //childPageActive = WebRouter.navigatePath(routes);
 
-    if (lastPathName.startsWith(thisPagePath+'/page2')) {
+    /*if (lastPathName.startsWith(thisPagePath+'/page2')) {
       if (childPageActive != '/page2') {
         childPageActive = '/page2';
         Future.microtask(() {//navigateToPage(1);
@@ -373,7 +471,7 @@ class _Page1State extends State<Page1> {
             print("PAGE1 END");
           });});
       }
-    }
+    }*/
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -388,7 +486,7 @@ class _Page1State extends State<Page1> {
             automaticallyImplyLeading: true, // Remove default back button
             leading: IconButton(
               icon: Icon(Icons.arrow_back),
-              onPressed: widget.onGoBack,
+              onPressed: WebRouter.goBack,
             ),
           ),
           body: Center(
@@ -404,7 +502,7 @@ class _Page1State extends State<Page1> {
                 Text('Clean URL: /page1'),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  onPressed: () => widget.onNavigateToPage(thisPagePath+'/page2', () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page2.thisPagePath, () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -446,12 +544,12 @@ class _Page1State extends State<Page1> {
 
 class Page2 extends StatefulWidget {
 
-  final Function(String, VoidCallback) onNavigateToPage;
-  final bool Function() onGoBack;
-  final String parentPath; // url till parent page
-  final String startPath;
+  static String thisPagePath = '/page2';
 
-  const Page2({super.key, required this.onNavigateToPage, required this.onGoBack, required this.parentPath, required this.startPath}); // url when app loaded
+  String thisPageFullPath = thisPagePath;
+  final String parentPath; // url till parent page
+
+  Page2({super.key, required this.parentPath}); // url when app loaded
 
   @override
   _Page2State createState() => _Page2State();
@@ -459,16 +557,20 @@ class Page2 extends StatefulWidget {
 
 class _Page2State extends State<Page2> {
 
-  String thisPagePath = '/page2';
   String childPageActive = '';
+  static bool pathStarted = false;
+  Map<String,Widget> routes = {};
 
   @override
   void initState() {
 
-    lastPageState = this;
+    WebRouter.lastPageState = this;
+    widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
+
+    /*lastPageState = this;
     //super.initState();
 
-    thisPagePath = widget.parentPath+thisPagePath;
+    thisPagePath = widget.parentPath+thisPagePath;*/
   }
 
   @override
@@ -484,7 +586,7 @@ class _Page2State extends State<Page2> {
             backgroundColor: Colors.green,
             leading: IconButton(
               icon: Icon(Icons.arrow_back),
-              onPressed: widget.onGoBack,
+              onPressed: WebRouter.goBack,
             ),
           ),
           body: Center(
@@ -503,7 +605,7 @@ class _Page2State extends State<Page2> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     ElevatedButton(
-                      onPressed: widget.onGoBack,
+                      onPressed: WebRouter.goBack,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -512,7 +614,7 @@ class _Page2State extends State<Page2> {
                     ),
                     SizedBox(width: 20),
                     ElevatedButton(
-                      onPressed: () => widget.onNavigateToPage('', () {}),
+                      onPressed: () => WebRouter.navigateToPage('', () {}),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -523,7 +625,7 @@ class _Page2State extends State<Page2> {
                 ),
                 SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => widget.onNavigateToPage('', () {}),
+                  onPressed: () => WebRouter.navigateToPage('', () {}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
