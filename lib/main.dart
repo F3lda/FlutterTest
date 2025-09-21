@@ -159,6 +159,29 @@ class WebRouter {
     }
   }
 
+  static bool goBackApp(BuildContext context, String parentPagePath) {
+
+    if (html.window.location.pathname != '' && html.window.location.pathname != '/') {
+      historyPosition++;
+
+      if (parentPagePath == '') {parentPagePath = '/';}
+
+
+      html.window.history.pushState(
+          {'page': parentPagePath},
+          'Page $parentPagePath',
+          parentPagePath
+      );
+      lastPathname = html.window.location.pathname??'';
+
+      Navigator.pop(context);
+      return true;
+    } else {
+      print('📱 No history to go back - history position: $historyPosition');
+      return false;
+    }
+  }
+
   static bool initPath(Map<String,Widget> routes, bool pathStarted, VoidCallback setStateCallback) {
     if (pathStarted) return true; // run only once in initState() in current widget
 
@@ -173,7 +196,7 @@ class WebRouter {
     return true;
   }
 
-  static String navigatePath(BuildContext context, Map<String,Widget> routes, String thisPagePath, String childPageActive, VoidCallback onPopPage) {
+  static String navigatePath(BuildContext context, Map<String,Widget> routes, State<dynamic> thisPageState, String thisPagePath, String childPageActive, VoidCallback onPopPage) {
     //print("navigatePath: "+ thisPagePath + ' : ' + lastPathname);
     List<String> listRoutes = routes.keys.toList();
     for(var i = 0; i < listRoutes.length; i++){
@@ -183,6 +206,7 @@ class WebRouter {
           Future.microtask(() {//navigateToPage(1);
             Navigator.push(context, MaterialPageRoute(builder: (context) =>
                 routes[listRoutes[i]]!)).then((onValue) {
+              lastPageState = thisPageState;
               onPopPage();
               //print("PAGE1 END");
             });});
@@ -202,6 +226,59 @@ class WebRouter {
 
 
     return '';
+  }
+
+  static (List<String>, String) checkForParams(int thisPageParamsCount, String thisPagePath, bool pathStarted) {
+    List<String> params = [];
+
+    if (appStartPath != '' && appStartPath != '/' && !pathStarted) {
+
+      String currentPathnameParams = (appStartPath).replaceFirst(thisPagePath, '');
+      params = currentPathnameParams.split('/').take(thisPageParamsCount*2).toList();
+
+      //TODO replaceState with params
+
+      String newPath = thisPagePath+params.join('/');
+      print(newPath);
+
+      html.window.history.replaceState(
+          {'page': newPath},
+          'Page $newPath',
+          newPath
+      );
+
+      lastPathname = html.window.location.pathname??'';
+
+
+    } else {
+
+      params = (html.window.location.pathname ?? '').replaceFirst(thisPagePath, '').split('/');
+    }
+
+    /*
+
+
+    if (currentPathnameParams != '') {
+      params = currentPathnameParams.split('/');
+        /*int
+      List<String> listRoutes = routes.keys.toList();
+      */
+
+
+
+    }*/
+
+    print('checkForParams: ');
+    //print('INIT PATH PARAMS:');
+    print(appStartPath);
+    //print(currentPathnameParams);
+    print(lastPathname);
+    print(thisPagePath);
+    print(html.window.location.pathname ?? '');
+
+    print(params);
+    print(params.join('/'));
+    return (params, params.join('/'));
   }
 }
 
@@ -224,37 +301,21 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Clean URL Navigation Test',
-      home: NavigationManager(),
-      /*html.window.history.pushState(
-            {'page': 2},
-            'Page 2',
-            '/page2'
-        );Navigator.of(context).pushNamed('/page2');*/
-
+      home: Page0(),
     );
   }
 }
 
 
-class NavigationManager extends StatefulWidget {
-
+class Page0 extends StatefulWidget {
 
   String thisPageFullPath = '';
 
   @override
-  _NavigationManagerState createState() => _NavigationManagerState();
+  _Page0State createState() => _Page0State();
 }
 
-
-/*late State<dynamic> lastPageState;
-
-String lastPathName = ''; // currentUrl
-
-int historyPosition = 1;
-
-String startPath = '';*/
-class _NavigationManagerState extends State<NavigationManager> {
-
+class _Page0State extends State<Page0> {
 
   String childPageActive = '';
   static bool pathStarted = false;
@@ -264,7 +325,6 @@ class _NavigationManagerState extends State<NavigationManager> {
   void initState() {
     super.initState();
 
-
     WebRouter.init(context, '');
 
     WebRouter.lastPageState = this;
@@ -273,36 +333,13 @@ class _NavigationManagerState extends State<NavigationManager> {
       widget.thisPageFullPath+Page1.thisPagePath : Page1(parentPath: widget.thisPageFullPath)
     };
     pathStarted = WebRouter.initPath(routes, pathStarted, () {setState(() {});});
-
-
-
-    /*if (startPath.startsWith(thisPagePath+'/page1')) {
-      navigateToPage(thisPagePath+'/page1', () {setState(() {});});
-    }*/
-
   }
 
 
 
   @override
   Widget build(BuildContext context) {
-    childPageActive = WebRouter.navigatePath(context, routes, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; WebRouter.lastPageState = this;});
-    /*if (lastPathName == '/'){
-
-    } else if (lastPathName.startsWith('/page1')) {
-      if (childPageActive != '/page1') {
-        childPageActive = '/page1';
-        Future.microtask(() {//navigateToPage(1);
-            Navigator.push(context, MaterialPageRoute(builder: (context) =>
-                Page1(onNavigateToPage: navigateToPage,
-                    onGoBack: goBack,
-                    parentPath: thisPagePath, startPath: startPath))).then((onValue) {
-              childPageActive = '';
-              lastPageState = this;
-              print("PAGE1 END");
-            });});
-      }
-    }*/
+    childPageActive = WebRouter.navigatePath(context, routes, this, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; setState(() {});});
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -329,7 +366,7 @@ class _NavigationManagerState extends State<NavigationManager> {
                 Text('Clean URL: /page1'),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page1.thisPagePath, () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page1.thisPagePath+'/param1', () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -398,6 +435,7 @@ class _NavigationManagerState extends State<NavigationManager> {
 class Page1 extends StatefulWidget {
 
   static String thisPagePath = '/page1';
+  final String _thisPagePath = thisPagePath;
 
   String thisPageFullPath = thisPagePath;
   final String parentPath; // url till parent page
@@ -410,68 +448,32 @@ class Page1 extends StatefulWidget {
 
 class _Page1State extends State<Page1> {
 
-
-  //Page1({Key? key, required this.onNavigateToPage, required this.onGoBack, required this.parentPath, required this.startPath}) : super(key: key);
-
   String childPageActive = '';
   static bool pathStarted = false;
   Map<String,Widget> routes = {};
+  final int thisPageParamsCount = 1;
+  /*Map<String,int> params = { // number of params before next path
+    Page2.thisPagePath : 1,
+    Page3.thisPagePath : 1
+  };*/
 
   @override
   void initState() {
 
     WebRouter.lastPageState = this;
-    widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
+
+    var (paramsValues, paramsPath) = WebRouter.checkForParams(thisPageParamsCount, widget.parentPath+widget._thisPagePath, pathStarted);
+    widget.thisPageFullPath = widget.parentPath+widget._thisPagePath+paramsPath;
     routes = {
-      widget.thisPageFullPath+Page2.thisPagePath : Page2(parentPath: widget.thisPageFullPath)
+      widget.thisPageFullPath+Page2.thisPagePath : Page2(parentPath: widget.thisPageFullPath),
+      widget.thisPageFullPath+Page3.thisPagePath : Page3(parentPath: widget.thisPageFullPath)
     };
     pathStarted = WebRouter.initPath(routes, pathStarted, () {setState(() {});});
-
-
-    /*
-    lastPageState = this;
-    //super.initState();
-
-    widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
-*/
-    /*
-    routes = {
-      thisPagePath + '/page2' : Page2(parentPath: thisPagePath),
-      thisPagePath + '/page3' : Page2(parentPath: thisPagePath),
-    };
-
-    */
-
-    // pathStarted = WebRouter.pathInit(routes) //{return 1;}
-
-    /*if (!pathStarted) { // run only once
-      pathStarted = true;
-      if (widget.startPath.startsWith(thisPagePath + '/page2')) {
-        widget.onNavigateToPage(thisPagePath + '/page2', () {setState(() {});});
-      }
-    }*/
   }
 
   @override
   Widget build(BuildContext context) {
-    childPageActive = WebRouter.navigatePath(context, routes, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; WebRouter.lastPageState = this;});
-
-    //childPageActive = WebRouter.navigatePath(routes);
-
-    /*if (lastPathName.startsWith(thisPagePath+'/page2')) {
-      if (childPageActive != '/page2') {
-        childPageActive = '/page2';
-        Future.microtask(() {//navigateToPage(1);
-          Navigator.push(context, MaterialPageRoute(builder: (context) =>
-              Page2(onNavigateToPage: widget.onNavigateToPage,
-                  onGoBack: widget.onGoBack,
-                  parentPath: thisPagePath, startPath: widget.startPath))).then((onValue) {
-            childPageActive = '';
-            lastPageState = this;
-            print("PAGE1 END");
-          });});
-      }
-    }*/
+    childPageActive = WebRouter.navigatePath(context, routes, this, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; setState(() {});});
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -486,7 +488,7 @@ class _Page1State extends State<Page1> {
             automaticallyImplyLeading: true, // Remove default back button
             leading: IconButton(
               icon: Icon(Icons.arrow_back),
-              onPressed: WebRouter.goBack,
+              onPressed: () {WebRouter.goBackApp(context, widget.parentPath);},
             ),
           ),
           body: Center(
@@ -509,6 +511,18 @@ class _Page1State extends State<Page1> {
                   ),
                   child: Text(
                     'Go to Page 2',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                ),
+                SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page3.thisPagePath, () {setState(() {});}),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  ),
+                  child: Text(
+                    'Go to Page 3',
                     style: TextStyle(fontSize: 18, color: Colors.white),
                   ),
                 ),
@@ -566,11 +580,6 @@ class _Page2State extends State<Page2> {
 
     WebRouter.lastPageState = this;
     widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
-
-    /*lastPageState = this;
-    //super.initState();
-
-    thisPagePath = widget.parentPath+thisPagePath;*/
   }
 
   @override
@@ -586,7 +595,7 @@ class _Page2State extends State<Page2> {
             backgroundColor: Colors.green,
             leading: IconButton(
               icon: Icon(Icons.arrow_back),
-              onPressed: WebRouter.goBack,
+              onPressed: () {WebRouter.goBackApp(context, widget.parentPath);},
             ),
           ),
           body: Center(
@@ -662,11 +671,30 @@ class _Page2State extends State<Page2> {
   }
 }
 
-class Page3 extends StatelessWidget {
-  final Function(int) onNavigateToPage;
-  final bool Function() onGoBack;
+class Page3 extends StatefulWidget {
 
-  const Page3({Key? key, required this.onNavigateToPage, required this.onGoBack}) : super(key: key);
+  static String thisPagePath = '/page3';
+
+  String thisPageFullPath = thisPagePath;
+  final String parentPath; // url till parent page
+
+  Page3({super.key, required this.parentPath}); // url when app loaded
+
+  @override
+  _Page3State createState() => _Page3State();
+}
+
+class _Page3State extends State<Page3> {
+  String childPageActive = '';
+  static bool pathStarted = false;
+  Map<String,Widget> routes = {};
+
+  @override
+  void initState() {
+    WebRouter.lastPageState = this;
+    widget.thisPageFullPath = widget.parentPath + widget.thisPageFullPath;
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -681,7 +709,7 @@ class Page3 extends StatelessWidget {
             backgroundColor: Colors.blue,
             leading: IconButton(
               icon: Icon(Icons.arrow_back),
-              onPressed: onGoBack,
+              onPressed: () {WebRouter.goBackApp(context, widget.parentPath);},
             ),
           ),
           body: Center(
@@ -699,7 +727,7 @@ class Page3 extends StatelessWidget {
                 Column(
                   children: [
                     ElevatedButton(
-                      onPressed: onGoBack,
+                      onPressed: WebRouter.goBack,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -708,7 +736,7 @@ class Page3 extends StatelessWidget {
                     ),
                     SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () => onNavigateToPage(1),
+                      onPressed: () => WebRouter.navigateToPage('', (){}),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -717,7 +745,7 @@ class Page3 extends StatelessWidget {
                     ),
                     SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () => onNavigateToPage(2),
+                      onPressed: () => WebRouter.navigateToPage('', (){}),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.teal,
                         padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
