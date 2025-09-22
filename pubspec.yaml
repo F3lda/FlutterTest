@@ -47,6 +47,7 @@ dependencies:
   dio: ^5.7.0
   permission_handler: ^11.3.1
   open_file: ^3.5.10
+  universal_html: ^2.2.4
 
 dev_dependencies:
   flutter_test:

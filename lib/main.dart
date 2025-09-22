@@ -1,39 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:html' as html;
+//import 'dart:html' as html;
+import 'package:universal_html/html.dart' as html;
 import 'package:flutter_web_plugins/url_strategy.dart';
 
-
-/*class RouteTracker extends StatelessWidget {
-  final Widget child;
-  static Widget? currentPage;
-
-  const RouteTracker({Key? key, required this.child}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    currentPage = child;
-    return child;
-  }
-
-  static void rebuildCurrent(BuildContext context) {
-    if (currentPage != null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => currentPage!),
-      );
-    }
-  }
-}
-
-void rebuildAllChildren(BuildContext context) {
-  void rebuild(Element el) {
-    el.markNeedsBuild();
-    el.visitChildren(rebuild);
-  }
-  (context as Element).visitChildren(rebuild);
-}*/
 
 class WebRouter {
   static late State<dynamic> lastPageState;
@@ -43,7 +16,7 @@ class WebRouter {
   static bool initStarted = false;
 
   static bool init(BuildContext context, String defaultPathname) {
-    if (initStarted) {return false;} // run only once
+    if (!kIsWeb || initStarted) {return false;} // run only once
     initStarted = true;
 
 
@@ -71,15 +44,9 @@ class WebRouter {
         } else {// forward
           historyPosition++;
           print("POPSTATE FORWARD");
-          // TODO rebuild current widget page and show next page
-          // or pop until root and rebuild all
-          //https://stackoverflow.com/questions/43778488/how-to-force-flutter-to-rebuild-redraw-all-widgets
-          lastPageState.setState(() {
+          // rebuild current widget page and show next page
+          lastPageState.setState(() {});
 
-          });
-          //RouteTracker.rebuildCurrent(context);
-
-          //rebuildAllChildren(context);
         }
         print('History position: $historyPosition');
 
@@ -118,29 +85,54 @@ class WebRouter {
     return true;
   }
 
-  static void navigateToPage(String pagePath, VoidCallback setStateCallback) {
+  static void navigateToPage(BuildContext context, String pagePath, Map<String,Widget> routes, VoidCallback setStateCallback) {
+
     print('📱 Navigating to Page $pagePath using history.pushState');
 
+    if (!kIsWeb) {
+      List<String> listRoutes = routes.keys.toList();
+      for(var i = 0; i < listRoutes.length; i++){
 
-    historyPosition++;
+        if (pagePath.startsWith(listRoutes[i])) {
+          lastPathname = pagePath;
 
-    // Push new state to browser history with clean URL
-    html.window.history.pushState(
-        {'page': pagePath},
-        'Page $pagePath',
-        pagePath
-    );
+          Future.microtask(() {
+            Navigator.push(context, MaterialPageRoute(builder: (context) =>
+            routes[listRoutes[i]]!)).then((onValue) {
+              //lastPageState = thisPageState;
+              setStateCallback();
+              //print("PAGE1 END");
+            });
+          });
 
-    lastPathname = html.window.location.pathname??'';
+        }
+      }
 
 
+    } else {
 
-    //setState(() {});
-    //RouteTracker.rebuildCurrent(context);
-    setStateCallback();
+
+      historyPosition++;
+
+      // Push new state to browser history with clean URL
+      html.window.history.pushState(
+          {'page': pagePath},
+          'Page $pagePath',
+          pagePath
+      );
+
+      lastPathname = html.window.location.pathname ?? '';
+
+
+      //setState(() {});
+      //RouteTracker.rebuildCurrent(context);
+      setStateCallback();
+    }
   }
 
   static bool goBack() {
+    if (!kIsWeb) {return false;}
+
     if (html.window.location.pathname != '' && html.window.location.pathname != '/') {
       //if (historyPosition > 1) {
       print('📱 Flutter back button - using history.back()');
@@ -160,35 +152,42 @@ class WebRouter {
   }
 
   static bool goBackApp(BuildContext context, String parentPagePath) {
-
-    if (html.window.location.pathname != '' && html.window.location.pathname != '/') {
-      historyPosition++;
-
-      if (parentPagePath == '') {parentPagePath = '/';}
-
-
-      html.window.history.pushState(
-          {'page': parentPagePath},
-          'Page $parentPagePath',
-          parentPagePath
-      );
-      lastPathname = html.window.location.pathname??'';
-
+    if (!kIsWeb) {
+      lastPathname = parentPagePath;
       Navigator.pop(context);
       return true;
     } else {
-      print('📱 No history to go back - history position: $historyPosition');
-      return false;
+      if (html.window.location.pathname != '' && html.window.location.pathname != '/') {
+        historyPosition++;
+
+        if (parentPagePath == '') {
+          parentPagePath = '/';
+        }
+
+
+        html.window.history.pushState(
+            {'page': parentPagePath},
+            'Page $parentPagePath',
+            parentPagePath
+        );
+        lastPathname = html.window.location.pathname ?? '';
+
+        Navigator.pop(context);
+        return true;
+      } else {
+        print('📱 No history to go back - history position: $historyPosition');
+        return false;
+      }
     }
   }
 
-  static bool initPath(Map<String,Widget> routes, bool pathStarted, VoidCallback setStateCallback) {
-    if (pathStarted) return true; // run only once in initState() in current widget
+  static bool initPath(BuildContext context, Map<String,Widget> routes, bool pathStarted, VoidCallback setStateCallback) {
+    if (!kIsWeb || pathStarted) return true; // run only if web or once in initState() in current widget
 
     List<String> listRoutes = routes.keys.toList();
     for(var i = 0; i < listRoutes.length; i++){
       if(appStartPath.startsWith(listRoutes[i])) {
-        navigateToPage(listRoutes[i], setStateCallback);
+        navigateToPage(context, listRoutes[i], routes, setStateCallback);
         return true;
       }
     }
@@ -196,14 +195,16 @@ class WebRouter {
     return true;
   }
 
-  static String navigatePath(BuildContext context, Map<String,Widget> routes, State<dynamic> thisPageState, String thisPagePath, String childPageActive, VoidCallback onPopPage) {
+  static String navigatePath(BuildContext context, Map<String,Widget> routes, State<dynamic> thisPageState, String childPageActive, VoidCallback onPopPage) {
+    if (!kIsWeb) {return '';}
+
     //print("navigatePath: "+ thisPagePath + ' : ' + lastPathname);
     List<String> listRoutes = routes.keys.toList();
     for(var i = 0; i < listRoutes.length; i++){
-//print(listRoutes[i]);
+
       if (lastPathname.startsWith(listRoutes[i])) {
         if (childPageActive != listRoutes[i]) {
-          Future.microtask(() {//navigateToPage(1);
+          Future.microtask(() {
             Navigator.push(context, MaterialPageRoute(builder: (context) =>
                 routes[listRoutes[i]]!)).then((onValue) {
               lastPageState = thisPageState;
@@ -211,17 +212,13 @@ class WebRouter {
               //print("PAGE1 END");
             });});
 
-          print("navigatePath: "+ thisPagePath + ' : ' + listRoutes[i] + ' : ' + lastPathname);
+          //print("navigatePath: "+ thisPagePath + ' : ' + listRoutes[i] + ' : ' + lastPathname);
 
           //childPageActive = '/page1';
           return listRoutes[i];
         }
       }
 
-      /*if(appStartPath.startsWith(listRoutes[i])) {
-        navigateToPage(listRoutes[i], setStateCallback);
-        return true;
-      }*/
     }
 
 
@@ -231,50 +228,48 @@ class WebRouter {
   static (List<String>, String) checkForParams(int thisPageParamsCount, String thisPagePath, bool pathStarted) {
     List<String> params = [];
 
-    if (appStartPath != '' && appStartPath != '/' && !pathStarted) {
+    if (!kIsWeb) {
 
-      String currentPathnameParams = (appStartPath).replaceFirst(thisPagePath, '');
-      params = currentPathnameParams.split('/').take(thisPageParamsCount*2).toList();
-
-      //TODO replaceState with params
-
-      String newPath = thisPagePath+params.join('/');
-      print(newPath);
-
-      html.window.history.replaceState(
-          {'page': newPath},
-          'Page $newPath',
-          newPath
-      );
-
-      lastPathname = html.window.location.pathname??'';
+      params = (lastPathname)
+          .replaceFirst(thisPagePath, '')
+          .split('/');
 
 
     } else {
+      if (appStartPath != '' && appStartPath != '/' && !pathStarted) {
+        String currentPathnameParams = (appStartPath).replaceFirst(
+            thisPagePath, '');
+        params = currentPathnameParams.split('/')
+            .take(thisPageParamsCount * 2)
+            .toList();
 
-      params = (html.window.location.pathname ?? '').replaceFirst(thisPagePath, '').split('/');
+        // replaceState with params
+
+        String newPath = thisPagePath + params.join('/');
+        print(newPath);
+
+        html.window.history.replaceState(
+            {'page': newPath},
+            'Page $newPath',
+            newPath
+        );
+
+        lastPathname = html.window.location.pathname ?? '';
+      } else {
+        params = (html.window.location.pathname ?? '')
+            .replaceFirst(thisPagePath, '')
+            .split('/');
+      }
+
+
+      print('checkForParams: ');
+      //print('INIT PATH PARAMS:');
+      print(appStartPath);
+      //print(currentPathnameParams);
+      print(lastPathname);
+      print(thisPagePath);
+      print(html.window.location.pathname ?? '');
     }
-
-    /*
-
-
-    if (currentPathnameParams != '') {
-      params = currentPathnameParams.split('/');
-        /*int
-      List<String> listRoutes = routes.keys.toList();
-      */
-
-
-
-    }*/
-
-    print('checkForParams: ');
-    //print('INIT PATH PARAMS:');
-    print(appStartPath);
-    //print(currentPathnameParams);
-    print(lastPathname);
-    print(thisPagePath);
-    print(html.window.location.pathname ?? '');
 
     print(params);
     print(params.join('/'));
@@ -294,13 +289,12 @@ class MyApp extends StatelessWidget {
 
   @override
   void initState() {
-    print('INIT2 search URL: ${html.window.location.pathname}');
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Clean URL Navigation Test',
+      title: 'WebRouter Test',
       home: Page0(),
     );
   }
@@ -309,7 +303,7 @@ class MyApp extends StatelessWidget {
 
 class Page0 extends StatefulWidget {
 
-  String thisPageFullPath = '';
+
 
   @override
   _Page0State createState() => _Page0State();
@@ -317,6 +311,7 @@ class Page0 extends StatefulWidget {
 
 class _Page0State extends State<Page0> {
 
+  String thisPageFullPath = '';
   String childPageActive = '';
   static bool pathStarted = false;
   Map<String,Widget> routes = {};
@@ -330,16 +325,16 @@ class _Page0State extends State<Page0> {
     WebRouter.lastPageState = this;
     //widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
     routes = {
-      widget.thisPageFullPath+Page1.thisPagePath : Page1(parentPath: widget.thisPageFullPath)
+      thisPageFullPath+Page1.thisPagePath : Page1(parentPath: thisPageFullPath)
     };
-    pathStarted = WebRouter.initPath(routes, pathStarted, () {setState(() {});});
+    pathStarted = WebRouter.initPath(context, routes, pathStarted, () {setState(() {});});
   }
 
 
 
   @override
   Widget build(BuildContext context) {
-    childPageActive = WebRouter.navigatePath(context, routes, this, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; setState(() {});});
+    childPageActive = WebRouter.navigatePath(context, routes, this, childPageActive, () {childPageActive = ''; setState(() {});});
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -358,15 +353,14 @@ class _Page0State extends State<Page0> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  html.window.location.pathname?? '',
+                  (kIsWeb) ? html.window.location.pathname??'' : thisPageFullPath,
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 20),
-                Text('This is the first page'),
-                Text('Clean URL: /page1'),
+                Text('This is the page: 0'),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page1.thisPagePath+'/param1', () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage(context, thisPageFullPath+Page1.thisPagePath+'/param1', routes, () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -377,52 +371,6 @@ class _Page0State extends State<Page0> {
                   ),
                 ),
                 SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage('', () {setState(() {});}),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  ),
-                  child: Text(
-                    'Go to Page 2',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
-                  ),
-                ),
-                SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage('', () {setState(() {});}),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  ),
-                  child: Text(
-                    'Go to Page 3',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
-                  ),
-                ),
-                SizedBox(height: 20),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Current URL:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.href,
-                        style: TextStyle(fontSize: 12, color: Colors.blue[800]),
-                      ),
-                      SizedBox(height: 8),
-                      Text('Pathname:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.pathname!,
-                        style: TextStyle(fontSize: 12, color: Colors.green[800]),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
@@ -437,7 +385,6 @@ class Page1 extends StatefulWidget {
   static String thisPagePath = '/page1';
   final String _thisPagePath = thisPagePath;
 
-  String thisPageFullPath = thisPagePath;
   final String parentPath; // url till parent page
 
   Page1({super.key, required this.parentPath}); // url when app loaded
@@ -448,32 +395,30 @@ class Page1 extends StatefulWidget {
 
 class _Page1State extends State<Page1> {
 
+  String thisPageFullPath = '';
   String childPageActive = '';
   static bool pathStarted = false;
   Map<String,Widget> routes = {};
   final int thisPageParamsCount = 1;
-  /*Map<String,int> params = { // number of params before next path
-    Page2.thisPagePath : 1,
-    Page3.thisPagePath : 1
-  };*/
 
   @override
   void initState() {
 
+    thisPageFullPath = widget._thisPagePath;
     WebRouter.lastPageState = this;
 
     var (paramsValues, paramsPath) = WebRouter.checkForParams(thisPageParamsCount, widget.parentPath+widget._thisPagePath, pathStarted);
-    widget.thisPageFullPath = widget.parentPath+widget._thisPagePath+paramsPath;
+    thisPageFullPath = widget.parentPath+widget._thisPagePath+paramsPath;
     routes = {
-      widget.thisPageFullPath+Page2.thisPagePath : Page2(parentPath: widget.thisPageFullPath),
-      widget.thisPageFullPath+Page3.thisPagePath : Page3(parentPath: widget.thisPageFullPath)
+      thisPageFullPath+Page2.thisPagePath : Page2(parentPath: thisPageFullPath),
+      thisPageFullPath+Page3.thisPagePath : Page3(parentPath: thisPageFullPath)
     };
-    pathStarted = WebRouter.initPath(routes, pathStarted, () {setState(() {});});
+    pathStarted = WebRouter.initPath(context, routes, pathStarted, () {setState(() {});});
   }
 
   @override
   Widget build(BuildContext context) {
-    childPageActive = WebRouter.navigatePath(context, routes, this, widget.thisPageFullPath, childPageActive, () {childPageActive = ''; setState(() {});});
+    childPageActive = WebRouter.navigatePath(context, routes, this, childPageActive, () {childPageActive = ''; setState(() {});});
 
     return PopScope(
         canPop: true, //When false, blocks the current route from being popped.
@@ -496,15 +441,14 @@ class _Page1State extends State<Page1> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'PAGE 1',
+                  (kIsWeb) ? html.window.location.pathname??'' : thisPageFullPath,
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 20),
-                Text('This is the first page'),
-                Text('Clean URL: /page1'),
+                Text('This is the page: 1'),
                 SizedBox(height: 40),
                 ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page2.thisPagePath, () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage(context, thisPageFullPath+Page2.thisPagePath, routes, () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -514,9 +458,9 @@ class _Page1State extends State<Page1> {
                     style: TextStyle(fontSize: 18, color: Colors.white),
                   ),
                 ),
-                SizedBox(height: 40),
+                SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage(widget.thisPageFullPath+Page3.thisPagePath, () {setState(() {});}),
+                  onPressed: () => WebRouter.navigateToPage(context, thisPageFullPath+Page3.thisPagePath, routes, () {setState(() {});}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -527,28 +471,6 @@ class _Page1State extends State<Page1> {
                   ),
                 ),
                 SizedBox(height: 20),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Current URL:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.href,
-                        style: TextStyle(fontSize: 12, color: Colors.blue[800]),
-                      ),
-                      SizedBox(height: 8),
-                      Text('Pathname:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.pathname!,
-                        style: TextStyle(fontSize: 12, color: Colors.green[800]),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
@@ -559,8 +481,8 @@ class _Page1State extends State<Page1> {
 class Page2 extends StatefulWidget {
 
   static String thisPagePath = '/page2';
+  final String _thisPagePath = thisPagePath;
 
-  String thisPageFullPath = thisPagePath;
   final String parentPath; // url till parent page
 
   Page2({super.key, required this.parentPath}); // url when app loaded
@@ -571,6 +493,7 @@ class Page2 extends StatefulWidget {
 
 class _Page2State extends State<Page2> {
 
+  String thisPageFullPath = '';
   String childPageActive = '';
   static bool pathStarted = false;
   Map<String,Widget> routes = {};
@@ -578,8 +501,9 @@ class _Page2State extends State<Page2> {
   @override
   void initState() {
 
+    thisPageFullPath = widget._thisPagePath;
     WebRouter.lastPageState = this;
-    widget.thisPageFullPath = widget.parentPath+widget.thisPageFullPath;
+    thisPageFullPath = widget.parentPath+thisPageFullPath;
   }
 
   @override
@@ -603,67 +527,12 @@ class _Page2State extends State<Page2> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'PAGE 2',
+                  (kIsWeb) ? html.window.location.pathname??'' : thisPageFullPath,
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 20),
-                Text('This is the second page'),
-                Text('Clean URL: /page2'),
+                Text('This is the page: 2'),
                 SizedBox(height: 40),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton(
-                      onPressed: WebRouter.goBack,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: Text('← Flutter Back', style: TextStyle(color: Colors.white)),
-                    ),
-                    SizedBox(width: 20),
-                    ElevatedButton(
-                      onPressed: () => WebRouter.navigateToPage('', () {}),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: Text('Page 3 →', style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => WebRouter.navigateToPage('', () {}),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: Text('Jump to Page 1', style: TextStyle(color: Colors.white)),
-                ),
-                SizedBox(height: 20),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Current URL:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.href,
-                        style: TextStyle(fontSize: 12, color: Colors.blue[800]),
-                      ),
-                      SizedBox(height: 8),
-                      Text('Pathname:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.pathname!,
-                        style: TextStyle(fontSize: 12, color: Colors.green[800]),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
@@ -674,8 +543,8 @@ class _Page2State extends State<Page2> {
 class Page3 extends StatefulWidget {
 
   static String thisPagePath = '/page3';
+  final String _thisPagePath = thisPagePath;
 
-  String thisPageFullPath = thisPagePath;
   final String parentPath; // url till parent page
 
   Page3({super.key, required this.parentPath}); // url when app loaded
@@ -685,14 +554,17 @@ class Page3 extends StatefulWidget {
 }
 
 class _Page3State extends State<Page3> {
+
+  String thisPageFullPath = '';
   String childPageActive = '';
   static bool pathStarted = false;
   Map<String,Widget> routes = {};
 
   @override
   void initState() {
+    thisPageFullPath = widget._thisPagePath;
     WebRouter.lastPageState = this;
-    widget.thisPageFullPath = widget.parentPath + widget.thisPageFullPath;
+    thisPageFullPath = widget.parentPath + thisPageFullPath;
   }
 
 
@@ -717,85 +589,12 @@ class _Page3State extends State<Page3> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'PAGE 3',
+                  (kIsWeb) ? html.window.location.pathname??'' : thisPageFullPath,
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 20),
-                Text('This is the third page (deepest level)'),
-                Text('Clean URL: /page3'),
+                Text('This is the page: 3'),
                 SizedBox(height: 40),
-                Column(
-                  children: [
-                    ElevatedButton(
-                      onPressed: WebRouter.goBack,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: Text('← Flutter Back', style: TextStyle(color: Colors.white)),
-                    ),
-                    SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () => WebRouter.navigateToPage('', (){}),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: Text('Jump to Page 1', style: TextStyle(color: Colors.white)),
-                    ),
-                    SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () => WebRouter.navigateToPage('', (){}),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: Text('Jump to Page 2', style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 20),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Current URL:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.href,
-                        style: TextStyle(fontSize: 12, color: Colors.blue[800]),
-                      ),
-                      SizedBox(height: 8),
-                      Text('Pathname:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        html.window.location.pathname!,
-                        style: TextStyle(fontSize: 12, color: Colors.green[800]),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 20),
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.yellow[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Text('Clean URL Navigation:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      SizedBox(height: 8),
-                      Text('✅ Flutter buttons: history.back()', style: TextStyle(fontSize: 12)),
-                      Text('✅ Forward: history.pushState()', style: TextStyle(fontSize: 12)),
-                      Text('🌐 Browser back: default behavior', style: TextStyle(fontSize: 12)),
-                      Text('🚫 No hash (#) in URLs', style: TextStyle(fontSize: 12)),
-                      Text('🚫 No Flutter router used', style: TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
